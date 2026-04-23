@@ -1,0 +1,9 @@
+[package]
+name = "cioyu"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+[workspace]
+members = ["crates/cioyu_rng"]
+resolver = "2"
