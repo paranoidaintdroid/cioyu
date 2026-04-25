@@ -6,17 +6,17 @@ pub trait Rng {
     }
 }
 
-pub struct SplitMix64{
-    state:u64,
+pub struct SplitMix64 {
+    state: u64,
 }
 
 impl SplitMix64 {
-    pub fn new(seed:u64) -> Self{
+    pub fn new(seed: u64) -> Self {
         Self { state: seed }
     }
 }
 
-impl Rng for SplitMix64{
+impl Rng for SplitMix64 {
     fn next_u64(&mut self) -> u64 {
         self.state = self.state.wrapping_add(0x9e3779b97f4a7c15);
 
@@ -29,32 +29,39 @@ impl Rng for SplitMix64{
     }
 }
 
+impl Iterator for SplitMix64 {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.next_u64())
+    }
+}
+
 pub struct Xoshiro256pp {
     state: [u64; 4],
 }
 
 impl Xoshiro256pp {
-    pub fn new(seed :u64) -> Self{
+    pub fn new(seed: u64) -> Self {
         let mut rng = SplitMix64::new(seed);
-        Self { 
+        Self {
             state: [
                 rng.next_u64(),
                 rng.next_u64(),
                 rng.next_u64(),
-                rng.next_u64(),    
-            ], 
+                rng.next_u64(),
+            ],
         }
     }
 }
 
 impl Rng for Xoshiro256pp {
     fn next_u64(&mut self) -> u64 {
-        let result = (self.state[0]
-            .wrapping_add(self.state[3]))
+        let result = (self.state[0].wrapping_add(self.state[3]))
             .rotate_left(23)
             .wrapping_add(self.state[0]);
 
-        let t =self.state[1] << 17;
+        let t = self.state[1] << 17;
         self.state[2] ^= self.state[0];
         self.state[3] ^= self.state[1];
         self.state[1] ^= self.state[2];
@@ -64,6 +71,14 @@ impl Rng for Xoshiro256pp {
         self.state[3] = self.state[3].rotate_left(45);
 
         result
+    }
+}
+
+impl Iterator for Xoshiro256pp {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.next_u64())
     }
 }
 
@@ -80,7 +95,7 @@ impl Pcg {
         };
         rng.next_u64();
         rng.state = rng.state.wrapping_add(seed);
-        rng.next_u64(); 
+        rng.next_u64();
         rng
     }
 }
@@ -88,62 +103,92 @@ impl Pcg {
 impl Rng for Pcg {
     fn next_u64(&mut self) -> u64 {
         let old = self.state;
-        self.state = old.wrapping_mul(6364136223846793005).wrapping_add(self.increment);
+        self.state = old
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(self.increment);
         let xorshifted = ((old >> 18) ^ old) >> 27;
         let rot = (old >> 59) as u32;
 
-        return xorshifted.rotate_right(rot)
+        return xorshifted.rotate_right(rot);
+    }
+}
+
+impl Iterator for Pcg {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.next_u64())
     }
 }
 
 #[cfg(test)]
-mod test{
+mod test {
     use super::*;
     #[test]
-    fn split_mix64_test(){
-        let seed : u64 = 2;
+    fn split_mix64_test() {
+        let seed: u64 = 2;
         let mut rng_1 = SplitMix64::new(seed);
         let mut rng_2 = SplitMix64::new(seed);
 
-        for _ in 0..3{
+        for _ in 0..3 {
             assert_eq!(rng_1.next_u64(), rng_2.next_u64());
         }
     }
 
     #[test]
-    fn xoshiro_256pp_test(){
-        let seed : u64 = 2;
+    fn xoshiro_256pp_test() {
+        let seed: u64 = 2;
         let mut rng_1 = Xoshiro256pp::new(seed);
         let mut rng_2 = Xoshiro256pp::new(seed);
 
-        for _ in 0..3{
+        for _ in 0..3 {
             assert_eq!(rng_1.next_u64(), rng_2.next_u64());
         }
     }
 
     #[test]
-    fn f64_range_test(){
-        let seed : u64 = 2;
-        let mut rng_sm64 = SplitMix64::new(seed);
-        let mut rng_xsr256pp = Xoshiro256pp::new(seed);
-        
-        let rng_sm64 = rng_sm64.next_f64();
-        let rng_xsr256pp =rng_xsr256pp.next_f64();
-
-        assert!(rng_sm64 >= 0.0 && rng_sm64 < 1.0);
-        assert!(rng_xsr256pp >= 0.0 && rng_xsr256pp < 1.0);
-    }
-    #[test]
-    fn pcg_test(){
-        let seed : u64 = 2;
-        let increment : u64 = 7;
+    fn pcg_test() {
+        let seed: u64 = 2;
+        let increment: u64 = 7;
         let mut rng_1 = Pcg::new(seed, increment);
         let mut rng_2 = Pcg::new(seed, increment);
 
-        for _ in 0..3{
+        for _ in 0..3 {
             assert_eq!(rng_1.next_u64(), rng_2.next_u64());
         }
     }
 
-    
+    #[test]
+    fn f64_range_test() {
+        let seed: u64 = 2;
+        let mut rng_sm64 = SplitMix64::new(seed);
+        let mut rng_xsr256pp = Xoshiro256pp::new(seed);
+        let mut rng_pcg = Pcg::new(seed, 5);
+
+        let f64_sm64 = rng_sm64.next_f64();
+        let f64_xsr256pp = rng_xsr256pp.next_f64();
+        let f64_pcg = rng_pcg.next_f64();
+
+        assert!(f64_sm64 >= 0.0 && f64_sm64 < 1.0);
+        assert!(f64_xsr256pp >= 0.0 && f64_xsr256pp < 1.0);
+        assert!(f64_pcg >= 0.0 && f64_pcg < 1.0);
+    }
+
+    #[test]
+    fn iterator_test() {
+        let rng_sm64 = SplitMix64::new(42);
+        let v_sm64: Vec<u64> = rng_sm64.take(5).collect();
+
+        assert_eq!(v_sm64.len(), 5);
+
+        let rng_xsr256pp = Xoshiro256pp::new(42);
+        let v_xsr256pp: Vec<u64> = rng_xsr256pp.take(5).collect();
+
+        assert_eq!(v_xsr256pp.len(), 5);
+
+        let rng_pcg = SplitMix64::new(42);
+        let v_pcg: Vec<u64> = rng_pcg.take(5).collect();
+
+        assert_eq!(v_pcg.len(), 5);
+    }
 }
