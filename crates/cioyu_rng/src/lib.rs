@@ -100,16 +100,24 @@ impl Pcg {
     }
 }
 
-impl Rng for Pcg {
-    fn next_u64(&mut self) -> u64 {
+impl Pcg {
+    fn next_u32(&mut self) -> u32 {
         let old = self.state;
+
         self.state = old
             .wrapping_mul(6364136223846793005)
             .wrapping_add(self.increment);
-        let xorshifted = ((old >> 18) ^ old) >> 27;
+
+        let xorshifted = (((old >> 18) ^ old) >> 27) as u32;
         let rot = (old >> 59) as u32;
 
-        return xorshifted.rotate_right(rot);
+        xorshifted.rotate_right(rot)
+    }
+}
+
+impl Rng for Pcg {
+    fn next_u64(&mut self) -> u64 {
+        ((self.next_u32() as u64) << 32) | (self.next_u32() as u64)
     }
 }
 
@@ -122,73 +130,120 @@ impl Iterator for Pcg {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    #[test]
-    fn split_mix64_test() {
-        let seed: u64 = 2;
-        let mut rng_1 = SplitMix64::new(seed);
-        let mut rng_2 = SplitMix64::new(seed);
 
-        for _ in 0..3 {
-            assert_eq!(rng_1.next_u64(), rng_2.next_u64());
+    const SEED: u64 = 42;
+
+    #[test]
+    fn splitmix64_determinism() {
+        let mut rng1 = SplitMix64::new(SEED);
+        let mut rng2 = SplitMix64::new(SEED);
+
+        for _ in 0..1000 {
+            assert_eq!(rng1.next_u64(), rng2.next_u64());
         }
     }
 
     #[test]
-    fn xoshiro_256pp_test() {
-        let seed: u64 = 2;
-        let mut rng_1 = Xoshiro256pp::new(seed);
-        let mut rng_2 = Xoshiro256pp::new(seed);
+    fn xoshiro256pp_determinism() {
+        let mut rng1 = Xoshiro256pp::new(SEED);
+        let mut rng2 = Xoshiro256pp::new(SEED);
 
-        for _ in 0..3 {
-            assert_eq!(rng_1.next_u64(), rng_2.next_u64());
+        for _ in 0..1000 {
+            assert_eq!(rng1.next_u64(), rng2.next_u64());
         }
     }
 
     #[test]
-    fn pcg_test() {
-        let seed: u64 = 2;
-        let increment: u64 = 7;
-        let mut rng_1 = Pcg::new(seed, increment);
-        let mut rng_2 = Pcg::new(seed, increment);
+    fn pcg_determinism() {
+        let mut rng1 = Pcg::new(SEED, 7);
+        let mut rng2 = Pcg::new(SEED, 7);
 
-        for _ in 0..3 {
-            assert_eq!(rng_1.next_u64(), rng_2.next_u64());
+        for _ in 0..1000 {
+            assert_eq!(rng1.next_u64(), rng2.next_u64());
         }
     }
 
     #[test]
     fn f64_range_test() {
-        let seed: u64 = 2;
-        let mut rng_sm64 = SplitMix64::new(seed);
-        let mut rng_xsr256pp = Xoshiro256pp::new(seed);
-        let mut rng_pcg = Pcg::new(seed, 5);
+        let mut sm = SplitMix64::new(SEED);
+        let mut xs = Xoshiro256pp::new(SEED);
+        let mut pcg = Pcg::new(SEED, 5);
 
-        let f64_sm64 = rng_sm64.next_f64();
-        let f64_xsr256pp = rng_xsr256pp.next_f64();
-        let f64_pcg = rng_pcg.next_f64();
+        for _ in 0..10000 {
+            let v1 = sm.next_f64();
+            let v2 = xs.next_f64();
+            let v3 = pcg.next_f64();
 
-        assert!(f64_sm64 >= 0.0 && f64_sm64 < 1.0);
-        assert!(f64_xsr256pp >= 0.0 && f64_xsr256pp < 1.0);
-        assert!(f64_pcg >= 0.0 && f64_pcg < 1.0);
+            assert!(v1 >= 0.0 && v1 < 1.0);
+            assert!(v2 >= 0.0 && v2 < 1.0);
+            assert!(v3 >= 0.0 && v3 < 1.0);
+        }
     }
 
     #[test]
     fn iterator_test() {
-        let rng_sm64 = SplitMix64::new(42);
-        let v_sm64: Vec<u64> = rng_sm64.take(5).collect();
+        let sm_values: Vec<u64> = SplitMix64::new(SEED).take(5).collect();
+        let xs_values: Vec<u64> = Xoshiro256pp::new(SEED).take(5).collect();
+        let pcg_values: Vec<u64> = Pcg::new(SEED, 3).take(5).collect();
 
-        assert_eq!(v_sm64.len(), 5);
+        assert_eq!(sm_values.len(), 5);
+        assert_eq!(xs_values.len(), 5);
+        assert_eq!(pcg_values.len(), 5);
+    }
 
-        let rng_xsr256pp = Xoshiro256pp::new(42);
-        let v_xsr256pp: Vec<u64> = rng_xsr256pp.take(5).collect();
+    #[test]
+    fn mean_uniformity_test() {
+        let mut sm = SplitMix64::new(SEED);
+        let mut xs = Xoshiro256pp::new(SEED);
+        let mut pcg = Pcg::new(SEED, 9);
 
-        assert_eq!(v_xsr256pp.len(), 5);
+        let mut sum_sm = 0.0;
+        let mut sum_xs = 0.0;
+        let mut sum_pcg = 0.0;
 
-        let rng_pcg = SplitMix64::new(42);
-        let v_pcg: Vec<u64> = rng_pcg.take(5).collect();
+        let n = 100000;
 
-        assert_eq!(v_pcg.len(), 5);
+        for _ in 0..n {
+            sum_sm += sm.next_f64();
+            sum_xs += xs.next_f64();
+            sum_pcg += pcg.next_f64();
+        }
+
+        let mean_sm = sum_sm / n as f64;
+        let mean_xs = sum_xs / n as f64;
+        let mean_pcg = sum_pcg / n as f64;
+
+        let tolerance = 0.005;
+
+        println!("mean sm64  = {}", mean_sm);
+        println!("mean xoshi = {}", mean_xs);
+        println!("mean pcg   = {}", mean_pcg);
+
+        assert!((mean_sm - 0.5).abs() < tolerance);
+        assert!((mean_xs - 0.5).abs() < tolerance);
+        assert!((mean_pcg - 0.5).abs() < tolerance);
+    }
+
+    #[test]
+    fn histogram_uniformity_test() {
+        let mut rng = SplitMix64::new(SEED);
+
+        let mut buckets = [0u32; 10];
+        let samples = 100000;
+
+        for _ in 0..samples {
+            let v = rng.next_f64();
+            let idx = (v * 10.0) as usize;
+            buckets[idx] += 1;
+        }
+
+        let expected = samples / 10;
+
+        for b in buckets {
+            let diff = (b as i32 - expected as i32).abs();
+            assert!(diff < (samples as i32 / 20));
+        }
     }
 }
