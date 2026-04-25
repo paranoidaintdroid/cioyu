@@ -7,5 +7,12 @@ name = "cioyu"
 version = "0.1.0"
 
 [[package]]
+name = "cioyu_distributions"
+version = "0.1.0"
+dependencies = [
+ "cioyu_rng",
+]
+
+[[package]]
 name = "cioyu_rng"
 version = "0.1.0"

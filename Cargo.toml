@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 [workspace]
-members = ["crates/cioyu_rng"]
+members = ["crates/cioyu_distributions","crates/cioyu_rng"]
 resolver = "2"

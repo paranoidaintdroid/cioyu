@@ -1,0 +1,7 @@
+[package]
+name = "cioyu_distributions"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cioyu_rng = { path = "../cioyu_rng" }
