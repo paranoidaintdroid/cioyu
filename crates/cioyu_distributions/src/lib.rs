@@ -55,6 +55,34 @@ impl Exponential {
     }
 }
 
+pub struct Poisson {
+    //lambda: f64,
+    l: f64,
+}
+
+impl Poisson {
+    pub fn new(lambda: f64) -> Self {
+        Self {
+            //lambda : lambda,
+            l: (-lambda).exp(),
+        }
+    }
+
+    pub fn sample(&self, rng: &mut impl Rng) -> u64 {
+        let mut k: u64 = 0;
+        let mut p: f64 = 1.0;
+
+        loop {
+            k += 1;
+            p *= rng.next_f64();
+
+            if p <= self.l {
+                return k - 1;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,4 +204,48 @@ mod tests {
             mean
         );
     }
+
+    #[test]
+fn poisson_mean_variance_test() {
+    let mut rng = SplitMix64::new(12345);
+
+    let lambda = 4.0;
+    let pois = Poisson::new(lambda);
+
+    let samples = 10_000;
+
+    let mut sum = 0.0;
+    let mut sum_sq = 0.0;
+
+    for _ in 0..samples {
+        let x = pois.sample(&mut rng) as f64;
+
+        sum += x;
+        sum_sq += x * x;
+    }
+
+    let mean = sum / samples as f64;
+    let variance = (sum_sq / samples as f64) - mean * mean;
+
+    println!("poisson mean = {}", mean);
+    println!("poisson variance = {}", variance);
+
+    let mean_tol = lambda * 0.05;
+
+    assert!(
+        (mean - lambda).abs() < mean_tol,
+        "Expected mean ≈ {}, got {}",
+        lambda,
+        mean
+    );
+
+    let var_tol = lambda * 0.10;
+
+    assert!(
+        (variance - lambda).abs() < var_tol,
+        "Expected variance ≈ {}, got {}",
+        lambda,
+        variance
+    );
+}
 }
