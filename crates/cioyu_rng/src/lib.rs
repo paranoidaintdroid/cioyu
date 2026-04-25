@@ -67,6 +67,35 @@ impl Rng for Xoshiro256pp {
     }
 }
 
+pub struct Pcg {
+    state: u64,
+    increment: u64,
+}
+
+impl Pcg {
+    pub fn new(seed: u64, stream: u64) -> Self {
+        let mut rng = Self {
+            state: 0,
+            increment: (stream << 1) | 1,
+        };
+        rng.next_u64();
+        rng.state = rng.state.wrapping_add(seed);
+        rng.next_u64(); 
+        rng
+    }
+}
+
+impl Rng for Pcg {
+    fn next_u64(&mut self) -> u64 {
+        let old = self.state;
+        self.state = old.wrapping_mul(6364136223846793005).wrapping_add(self.increment);
+        let xorshifted = ((old >> 18) ^ old) >> 27;
+        let rot = (old >> 59) as u32;
+
+        return xorshifted.rotate_right(rot)
+    }
+}
+
 #[cfg(test)]
 mod test{
     use super::*;
@@ -100,8 +129,21 @@ mod test{
         
         let rng_sm64 = rng_sm64.next_f64();
         let rng_xsr256pp =rng_xsr256pp.next_f64();
-        
+
         assert!(rng_sm64 >= 0.0 && rng_sm64 < 1.0);
         assert!(rng_xsr256pp >= 0.0 && rng_xsr256pp < 1.0);
     }
+    #[test]
+    fn pcg_test(){
+        let seed : u64 = 2;
+        let increment : u64 = 7;
+        let mut rng_1 = Pcg::new(seed, increment);
+        let mut rng_2 = Pcg::new(seed, increment);
+
+        for _ in 0..3{
+            assert_eq!(rng_1.next_u64(), rng_2.next_u64());
+        }
+    }
+
+    
 }
