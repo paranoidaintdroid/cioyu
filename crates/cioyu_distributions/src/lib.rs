@@ -40,6 +40,21 @@ impl Normal {
     }
 }
 
+pub struct Exponential {
+    lambda: f64,
+}
+
+impl Exponential {
+    pub fn new(lambda: f64) -> Self {
+        Self { lambda: lambda }
+    }
+
+    pub fn sample(&mut self, rng: &mut impl Rng) -> f64 {
+        let u = rng.next_f64().max(f64::EPSILON);
+        -u.ln() / self.lambda
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,7 +91,7 @@ mod tests {
     }
 
     #[test]
-        fn normal_sigma_tests() {
+    fn normal_sigma_tests() {
         let mut rng = SplitMix64::new(12345);
         let mean = 0.0;
         let std_dev = 1.0;
@@ -128,6 +143,37 @@ mod tests {
             frac_3 > 0.995 && frac_3 < 0.999,
             "Expected ~99.7% within 3σ, got {}",
             frac_3
+        );
+    }
+
+    #[test]
+    fn exponential_mean_test() {
+        let mut rng = SplitMix64::new(12345);
+
+        let lambda = 2.0;
+        let expected_mean = 1.0 / lambda;
+
+        let mut exp = Exponential::new(lambda);
+
+        let samples = 10_000;
+        let mut sum = 0.0;
+
+        for _ in 0..samples {
+            let x = exp.sample(&mut rng);
+            sum += x;
+        }
+
+        let mean = sum / samples as f64;
+
+        println!("exp mean = {}", mean);
+
+        let tolerance = expected_mean * 0.05; // 5%
+
+        assert!(
+            (mean - expected_mean).abs() < tolerance,
+            "Expected mean ≈ {}, got {}",
+            expected_mean,
+            mean
         );
     }
 }
