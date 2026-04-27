@@ -206,46 +206,46 @@ mod tests {
     }
 
     #[test]
-fn poisson_mean_variance_test() {
-    let mut rng = SplitMix64::new(12345);
+    fn poisson_mean_variance_test() {
+        let mut rng = SplitMix64::new(12345);
 
-    let lambda = 4.0;
-    let pois = Poisson::new(lambda);
+        let lambda = 4.0;
+        let pois = Poisson::new(lambda);
 
-    let samples = 10_000;
+        let samples = 10_000;
 
-    let mut sum = 0.0;
-    let mut sum_sq = 0.0;
+        let mut sum = 0.0;
+        let mut sum_sq = 0.0;
 
-    for _ in 0..samples {
-        let x = pois.sample(&mut rng) as f64;
+        for _ in 0..samples {
+            let x = pois.sample(&mut rng) as f64;
 
-        sum += x;
-        sum_sq += x * x;
+            sum += x;
+            sum_sq += x * x;
+        }
+
+        let mean = sum / samples as f64;
+        let variance = (sum_sq / samples as f64) - mean * mean;
+
+        println!("poisson mean = {}", mean);
+        println!("poisson variance = {}", variance);
+
+        let mean_tol = lambda * 0.05;
+
+        assert!(
+            (mean - lambda).abs() < mean_tol,
+            "Expected mean ≈ {}, got {}",
+            lambda,
+            mean
+        );
+
+        let var_tol = lambda * 0.10;
+
+        assert!(
+            (variance - lambda).abs() < var_tol,
+            "Expected variance ≈ {}, got {}",
+            lambda,
+            variance
+        );
     }
-
-    let mean = sum / samples as f64;
-    let variance = (sum_sq / samples as f64) - mean * mean;
-
-    println!("poisson mean = {}", mean);
-    println!("poisson variance = {}", variance);
-
-    let mean_tol = lambda * 0.05;
-
-    assert!(
-        (mean - lambda).abs() < mean_tol,
-        "Expected mean ≈ {}, got {}",
-        lambda,
-        mean
-    );
-
-    let var_tol = lambda * 0.10;
-
-    assert!(
-        (variance - lambda).abs() < var_tol,
-        "Expected variance ≈ {}, got {}",
-        lambda,
-        variance
-    );
-}
 }
