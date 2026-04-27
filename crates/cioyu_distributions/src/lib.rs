@@ -126,6 +126,20 @@ impl Poisson {
     }
 }
 
+
+/// Statistical validation tests for probability distributions.
+///
+/// These tests verify that generated samples approximate the theoretical
+/// properties of each distribution (mean, variance, sigma coverage, etc).
+///
+/// Because sampling is stochastic, tolerances are used instead of exact equality.
+///
+/// Sample sizes are chosen to balance:
+/// - statistical reliability
+/// - reasonable test runtime
+///
+/// These tests are *not* proofs of correctness, but sanity checks that the
+/// implementations behave as expected.
 #[cfg(test)]
 mod tests {
     use super::*;
