@@ -48,7 +48,6 @@ This crate provides idiomatic Rust implementations and a unified
 Rng trait interface for experimentation, learning, and simulation.
 */
 
-
 pub trait Rng {
     fn next_u64(&mut self) -> u64;
 
@@ -128,10 +127,8 @@ impl Xoshiro256pp {
 }
 
 impl Rng for Xoshiro256pp {
-
     #[inline]
     fn next_u64(&mut self) -> u64 {
-
         let result = (self.state[0].wrapping_add(self.state[3]))
             .rotate_left(23)
             .wrapping_add(self.state[0]);
@@ -193,12 +190,9 @@ impl Pcg {
 
         xorshifted.rotate_right(rot)
     }
-
 }
 
-
 impl Rng for Pcg {
-    
     #[inline]
     fn next_u32(&mut self) -> u32 {
         self.next_u32_internal()
@@ -336,11 +330,7 @@ mod tests {
 
         let mean: f64 = values.iter().sum::<f64>() / N_LARGE as f64;
 
-        let variance: f64 = values
-            .iter()
-            .map(|v| (v - mean).powi(2))
-            .sum::<f64>()
-            / N_LARGE as f64;
+        let variance: f64 = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / N_LARGE as f64;
 
         let expected = 1.0 / 12.0;
 

@@ -1,69 +1,112 @@
 use cioyu_rng::Rng;
-
+/// Uniform distribution over the interval [low, high).
+///
+/// Sampling formula:
+/// x = low + U(0,1) * (high - low)
+#[derive(Clone, Debug)]
 pub struct Uniform {
     low: f64,
-    high: f64,
+    range: f64,
 }
 
 impl Uniform {
     pub fn new(low: f64, high: f64) -> Self {
+        assert!(high > low, "Uniform: high must be greater than low");
+
         Self {
-            low: low,
-            high: high,
+            low,
+            range: high - low,
         }
     }
 
-    pub fn sample(&mut self, rng: &mut impl Rng) -> f64 {
-        self.low + rng.next_f64() * (self.high - self.low)
+    #[inline]
+    pub fn sample(&self, rng: &mut impl Rng) -> f64 {
+        self.low + rng.next_f64() * self.range
     }
 }
 
+/// Normal (Gaussian) distribution using the Box–Muller transform.
+///
+/// This implementation caches the second generated sample,
+/// making it roughly twice as fast as the naive implementation.
+#[derive(Clone, Debug)]
 pub struct Normal {
     mean: f64,
     std_dev: f64,
+    cached: Option<f64>,
 }
 
 impl Normal {
     pub fn new(mean: f64, std_dev: f64) -> Self {
+        assert!(
+            std_dev > 0.0,
+            "Normal : Standard Deviation should be greater than 0"
+        );
+
         Self {
             mean: mean,
             std_dev: std_dev,
+            cached: None,
         }
     }
     pub fn sample(&mut self, rng: &mut impl Rng) -> f64 {
+        if let Some(z) = self.cached.take() {
+            return self.mean + self.std_dev * z;
+        }
+
         let u1 = rng.next_f64().max(f64::EPSILON);
         let u2 = rng.next_f64();
 
-        let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
+        let r = (-2.0 * u1.ln()).sqrt();
+        let theta = 2.0 * std::f64::consts::PI * u2;
 
-        self.mean + self.std_dev * z
+        let z0 = r * theta.cos();
+        let z1 = r * theta.sin();
+
+        self.cached = Some(z1);
+
+        self.mean + self.std_dev * z0
     }
 }
 
+/// Exponential distribution using the inverse CDF method.
+///
+/// x = -ln(U) / λ
+#[derive(Clone, Debug)]
 pub struct Exponential {
     lambda: f64,
 }
 
 impl Exponential {
     pub fn new(lambda: f64) -> Self {
+        assert!(lambda > 0.0, "Exponential: lambda must be positive");
+
         Self { lambda: lambda }
     }
 
-    pub fn sample(&mut self, rng: &mut impl Rng) -> f64 {
+    #[inline]
+    pub fn sample(&self, rng: &mut impl Rng) -> f64 {
         let u = rng.next_f64().max(f64::EPSILON);
         -u.ln() / self.lambda
     }
 }
 
+/// Poisson distribution using Knuth's algorithm.
+///
+/// Efficient for λ < ~10.
+#[allow(unused)]
+#[derive(Clone, Debug)]
 pub struct Poisson {
-    //lambda: f64,
+    lambda: f64,
     l: f64,
 }
 
 impl Poisson {
     pub fn new(lambda: f64) -> Self {
+        assert!(lambda > 0.0, "Poisson: lambda must be positive");
+
         Self {
-            //lambda : lambda,
+            lambda : lambda,
             l: (-lambda).exp(),
         }
     }
@@ -92,7 +135,7 @@ mod tests {
     fn test_uniform_range() {
         let low = 0.0;
         let high = 1000.0;
-        let mut uni = Uniform::new(low, high);
+        let uni = Uniform::new(low, high);
         let mut rng = SplitMix64::new(4);
 
         for _ in 0..1000 {
@@ -106,8 +149,8 @@ mod tests {
         let low = 0.0;
         let high = 1000.0;
 
-        let mut uni1 = Uniform::new(low, high);
-        let mut uni2 = Uniform::new(low, high);
+        let uni1 = Uniform::new(low, high);
+        let uni2 = Uniform::new(low, high);
 
         let mut rng1 = SplitMix64::new(4);
         let mut rng2 = SplitMix64::new(4);
@@ -181,7 +224,7 @@ mod tests {
         let lambda = 2.0;
         let expected_mean = 1.0 / lambda;
 
-        let mut exp = Exponential::new(lambda);
+        let exp = Exponential::new(lambda);
 
         let samples = 10_000;
         let mut sum = 0.0;
