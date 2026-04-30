@@ -3,6 +3,14 @@ use cioyu_rng::Rng;
 ///
 /// Sampling formula:
 /// x = low + U(0,1) * (high - low)
+
+
+pub trait Distribution {
+    type Output;
+    fn sample(&mut self, rng: &mut impl Rng) -> Self::Output;
+}
+
+
 #[derive(Clone, Debug)]
 pub struct Uniform {
     low: f64,
@@ -19,8 +27,12 @@ impl Uniform {
         }
     }
 
+}
+
+impl Distribution for Uniform {
+    type Output = f64;
     #[inline]
-    pub fn sample(&self, rng: &mut impl Rng) -> f64 {
+    fn sample(&mut self, rng: &mut impl Rng) -> Self::Output {
         self.low + rng.next_f64() * self.range
     }
 }
@@ -49,7 +61,13 @@ impl Normal {
             cached: None,
         }
     }
-    pub fn sample(&mut self, rng: &mut impl Rng) -> f64 {
+}
+
+
+
+impl Distribution for Normal {
+    type Output = f64;
+    fn sample(&mut self, rng: &mut impl Rng) -> Self::Output {
         if let Some(z) = self.cached.take() {
             return self.mean + self.std_dev * z;
         }
@@ -84,11 +102,15 @@ impl Exponential {
         Self { lambda: lambda }
     }
 
-    #[inline]
-    pub fn sample(&self, rng: &mut impl Rng) -> f64 {
+}
+
+impl Distribution for Exponential {
+    type Output = f64;
+    fn sample(&mut self, rng: &mut impl Rng) -> Self::Output {
         let u = rng.next_f64().max(f64::EPSILON);
         -u.ln() / self.lambda
     }
+
 }
 
 /// Poisson distribution using Knuth's algorithm.
@@ -111,7 +133,12 @@ impl Poisson {
         }
     }
 
-    pub fn sample(&self, rng: &mut impl Rng) -> u64 {
+    
+}
+
+impl Distribution for Poisson {
+    type Output = u64;
+    fn sample(&mut self, rng: &mut impl Rng) -> Self::Output {
         let mut k: u64 = 0;
         let mut p: f64 = 1.0;
 
@@ -149,7 +176,7 @@ mod tests {
     fn test_uniform_range() {
         let low = 0.0;
         let high = 1000.0;
-        let uni = Uniform::new(low, high);
+        let mut uni = Uniform::new(low, high);
         let mut rng = SplitMix64::new(4);
 
         for _ in 0..1000 {
@@ -163,8 +190,8 @@ mod tests {
         let low = 0.0;
         let high = 1000.0;
 
-        let uni1 = Uniform::new(low, high);
-        let uni2 = Uniform::new(low, high);
+        let mut uni1 = Uniform::new(low, high);
+        let mut uni2 = Uniform::new(low, high);
 
         let mut rng1 = SplitMix64::new(4);
         let mut rng2 = SplitMix64::new(4);
@@ -238,7 +265,7 @@ mod tests {
         let lambda = 2.0;
         let expected_mean = 1.0 / lambda;
 
-        let exp = Exponential::new(lambda);
+        let mut exp = Exponential::new(lambda);
 
         let samples = 10_000;
         let mut sum = 0.0;
@@ -267,7 +294,7 @@ mod tests {
         let mut rng = SplitMix64::new(12345);
 
         let lambda = 4.0;
-        let pois = Poisson::new(lambda);
+        let mut pois = Poisson::new(lambda);
 
         let samples = 10_000;
 
