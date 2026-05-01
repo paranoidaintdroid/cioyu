@@ -48,170 +48,17 @@ This crate provides idiomatic Rust implementations and a unified
 Rng trait interface for experimentation, learning, and simulation.
 */
 
-pub trait Rng {
-    fn next_u64(&mut self) -> u64;
+mod pcg32;
+mod seed;
+mod splitmix64;
+mod traits;
+mod xoshiro256pp;
 
-    #[inline]
-    fn next_u32(&mut self) -> u32 {
-        (self.next_u64() >> 32) as u32
-    }
-
-    ///Generate uniform values in [0,1)
-    #[inline]
-    fn next_f64(&mut self) -> f64 {
-        const DOUBLE_UNIT: f64 = 1.0 / (1u64 << 53) as f64;
-        let v = self.next_u64() >> 11;
-        (v as f64) * DOUBLE_UNIT
-    }
-}
-
-/// SplitMix64 - Fast Generator, primarily for seeding.
-#[derive(Clone, Debug)]
-pub struct SplitMix64 {
-    state: u64,
-}
-
-const SPLITMIX_GAMMA: u64 = 0x9e3779b97f4a7c15;
-const SPLITMIX_MUL1: u64 = 0xbf58476d1ce4e5b9;
-const SPLITMIX_MUL2: u64 = 0x94d049bb133111eb;
-
-impl SplitMix64 {
-    pub fn new(seed: u64) -> Self {
-        Self { state: seed }
-    }
-}
-
-impl Rng for SplitMix64 {
-    #[inline]
-    fn next_u64(&mut self) -> u64 {
-        self.state = self.state.wrapping_add(SPLITMIX_GAMMA);
-
-        let mut z = self.state;
-
-        z = (z ^ (z >> 30)).wrapping_mul(SPLITMIX_MUL1);
-        z = (z ^ (z >> 27)).wrapping_mul(SPLITMIX_MUL2);
-
-        z ^ (z >> 31)
-    }
-}
-
-impl Iterator for SplitMix64 {
-    type Item = u64;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.next_u64())
-    }
-}
-
-///Xoshiro256++ - Fast, high-quality general purpose RNG.
-#[derive(Clone, Debug)]
-pub struct Xoshiro256pp {
-    state: [u64; 4],
-}
-
-impl Xoshiro256pp {
-    pub fn new(seed: u64) -> Self {
-        let mut rng = SplitMix64::new(seed);
-
-        let state = [
-            rng.next_u64(),
-            rng.next_u64(),
-            rng.next_u64(),
-            rng.next_u64(),
-        ];
-
-        debug_assert!(state != [0, 0, 0, 0]);
-        Self { state }
-    }
-}
-
-impl Rng for Xoshiro256pp {
-    #[inline]
-    fn next_u64(&mut self) -> u64 {
-        let result = (self.state[0].wrapping_add(self.state[3]))
-            .rotate_left(23)
-            .wrapping_add(self.state[0]);
-
-        let t = self.state[1] << 17;
-        self.state[2] ^= self.state[0];
-        self.state[3] ^= self.state[1];
-        self.state[1] ^= self.state[2];
-        self.state[0] ^= self.state[3];
-
-        self.state[2] ^= t;
-        self.state[3] = self.state[3].rotate_left(45);
-
-        result
-    }
-}
-
-impl Iterator for Xoshiro256pp {
-    type Item = u64;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.next_u64())
-    }
-}
-
-/// PCG32 - Produces 32-bit outputs, which are combined to form 64 bits.
-#[derive(Clone, Debug)]
-pub struct Pcg {
-    state: u64,
-    increment: u64,
-}
-
-const PCG_MULTIPLIER: u64 = 6364136223846793005;
-
-impl Pcg {
-    pub fn new(seed: u64, stream: u64) -> Self {
-        let mut rng = Self {
-            state: 0,
-            increment: (stream << 1) | 1,
-        };
-        rng.next_u32();
-        rng.state = rng.state.wrapping_add(seed);
-        rng.next_u32();
-
-        rng
-    }
-
-    #[inline]
-    fn next_u32_internal(&mut self) -> u32 {
-        let old = self.state;
-
-        self.state = old
-            .wrapping_mul(PCG_MULTIPLIER)
-            .wrapping_add(self.increment);
-
-        let xorshifted = (((old >> 18) ^ old) >> 27) as u32;
-        let rot = (old >> 59) as u32;
-
-        xorshifted.rotate_right(rot)
-    }
-}
-
-impl Rng for Pcg {
-    #[inline]
-    fn next_u32(&mut self) -> u32 {
-        self.next_u32_internal()
-    }
-
-    #[inline]
-    fn next_u64(&mut self) -> u64 {
-        ((self.next_u32_internal() as u64) << 32) | (self.next_u32_internal() as u64)
-    }
-}
-
-impl Iterator for Pcg {
-    type Item = u64;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.next_u64())
-    }
-}
+pub use pcg32::Pcg32;
+pub use seed::expand_4;
+pub use splitmix64::SplitMix64;
+pub use traits::{Rng, SeedableRng};
+pub use xoshiro256pp::Xoshiro256pp;
 
 #[cfg(test)]
 mod tests {
@@ -247,8 +94,8 @@ mod tests {
 
     #[test]
     fn pcg_determinism() {
-        let mut a = Pcg::new(SEED, 7);
-        let mut b = Pcg::new(SEED, 7);
+        let mut a = Pcg32::new(SEED, 7);
+        let mut b = Pcg32::new(SEED, 7);
 
         for _ in 0..N_SMALL {
             assert_eq!(a.next_u64(), b.next_u64());
@@ -263,7 +110,7 @@ mod tests {
     fn f64_range_test() {
         let mut sm = SplitMix64::new(SEED);
         let mut xs = Xoshiro256pp::new(SEED);
-        let mut pcg = Pcg::new(SEED, 3);
+        let mut pcg = Pcg32::new(SEED, 3);
 
         for _ in 0..N_SMALL {
             let a = sm.next_f64();
@@ -284,7 +131,7 @@ mod tests {
     fn iterator_test() {
         let sm: Vec<u64> = SplitMix64::new(SEED).take(5).collect();
         let xs: Vec<u64> = Xoshiro256pp::new(SEED).take(5).collect();
-        let pcg: Vec<u64> = Pcg::new(SEED, 5).take(5).collect();
+        let pcg: Vec<u64> = Pcg32::new(SEED, 5).take(5).collect();
 
         assert_eq!(sm.len(), 5);
         assert_eq!(xs.len(), 5);

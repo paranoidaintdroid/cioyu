@@ -4,12 +4,10 @@ use cioyu_rng::Rng;
 /// Sampling formula:
 /// x = low + U(0,1) * (high - low)
 
-
 pub trait Distribution {
     type Output;
     fn sample(&mut self, rng: &mut impl Rng) -> Self::Output;
 }
-
 
 #[derive(Clone, Debug)]
 pub struct Uniform {
@@ -26,7 +24,6 @@ impl Uniform {
             range: high - low,
         }
     }
-
 }
 
 impl Distribution for Uniform {
@@ -62,8 +59,6 @@ impl Normal {
         }
     }
 }
-
-
 
 impl Distribution for Normal {
     type Output = f64;
@@ -101,7 +96,6 @@ impl Exponential {
 
         Self { lambda: lambda }
     }
-
 }
 
 impl Distribution for Exponential {
@@ -110,7 +104,6 @@ impl Distribution for Exponential {
         let u = rng.next_f64().max(f64::EPSILON);
         -u.ln() / self.lambda
     }
-
 }
 
 /// Poisson distribution using Knuth's algorithm.
@@ -128,12 +121,10 @@ impl Poisson {
         assert!(lambda > 0.0, "Poisson: lambda must be positive");
 
         Self {
-            lambda : lambda,
+            lambda: lambda,
             l: (-lambda).exp(),
         }
     }
-
-    
 }
 
 impl Distribution for Poisson {
@@ -152,7 +143,6 @@ impl Distribution for Poisson {
         }
     }
 }
-
 
 /// Statistical validation tests for probability distributions.
 ///
